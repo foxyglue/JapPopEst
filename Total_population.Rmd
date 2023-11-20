@@ -1,0 +1,455 @@
+# The causes of the decreasing population in Japan
+
+According to the latest data, the population of Japan has decreased significantly. We intend to seek the reasons for this phenomenon, predict population figures and prove them through relevant methods.
+
+Variables:
+
+-   Time: Month of observation
+
+-   Region: Where the data is recorded
+
+-   Population: Total population of Japan
+
+-   livebirths: Total live births
+
+-   Deaths: Total deaths per month
+
+-   Employment_rate: The percentage of the working-age population currently employed or actively seeking employment.
+
+-   Unemployment_rate: The percentage of the labor force that is unemployed and looking for work
+
+-   Consumption_expenditure: The amount paid to purchase necessary goods or services for daily lives.
+
+-   Income: Combined earnings of individuals within households
+
+# STORING THE CSV INTO VARIABLE
+
+```{r}
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+
+# Copy nya df yang nama variabelnya diganti 
+df_copy <- read_csv("CopyOfraw_data_japan.csv")
+
+#Hilangkan variabel Region
+df_copy <- df_copy %>% select(-c('Region'))
+
+head(df_copy)
+```
+
+```{r}
+#ubah format data time
+library(zoo)
+
+df_copy$Time <- as.yearmon(df_copy$Time, "%B.%Y")
+
+# Convert the date column to a proper date format
+df_copy$Time <- as.Date(paste0("01 ", df_copy$Time), format = "%d %B %Y")
+print(df_copy$Time)
+
+```
+
+## Outlier
+
+```{r}
+outlivebirths <- boxplot.stats(df_copy$livebirths)$out
+out_ind_livebirths <- which(df_copy$livebirths %in% c(outlivebirths))
+
+print("live births outlier")
+print(out_ind_livebirths)
+
+
+outdeaths <- boxplot.stats(df_copy$deaths)$out
+out_ind_deathss <- which(df_copy$deaths %in% c(outdeaths))
+print("deaths outlier")
+print(out_ind_deathss)
+
+outemploymentrate <- boxplot.stats(df_copy$employment_rate)$out
+out_ind_employmentrate <- which(df_copy$employment_rate %in% c(outemploymentrate))
+
+print("employment rate outlier")
+print(outemploymentrate)
+
+outunemploymentrate <- boxplot.stats(df_copy$unemployment_rate)$out
+out_ind_unemploymentrate <- which(df_copy$unemployment_rate %in% c(outunemploymentrate))
+
+print("unemployment rate outlier")
+print(out_ind_unemploymentrate)
+
+
+consumpout <- boxplot.stats(df_copy$consumption_expenditures)$out
+indconsumout <- which(df_copy$consumption_expenditures %in% c(consumpout))
+
+print("Consumption expenditure outlier")
+print(indconsumout)
+
+incomeout <- boxplot.stats(df_copy$income)$out
+indincomeout <- which(df_copy$income %in% c(incomeout))
+
+print("income expenditure outlier")
+print(indincomeout)
+
+```
+
+Because we are doing timeseries analysis so we chose to not delete our outliers.
+
+# Exploratory Data Analysis
+
+```{r}
+BasicSummary <- function(df, dgts = 3){
+  m <- ncol(df)
+  varNames <- colnames(df)
+  varType <- vector("character",m)
+  topLevel <- vector("character",m)
+  topCount <- vector("numeric",m)
+  missCount <- vector("numeric",m)
+  levels <- vector("numeric", m)
+  for (i in 1:m){
+    x <- df[,i]
+    varType[i] <- class(x)
+    xtab <- table(x, useNA = "ifany")
+    levels[i] <- length(xtab)
+    nums <- as.numeric(xtab)
+    maxnum <- max(nums)
+    topCount[i] <- maxnum
+    maxIndex <- which.max(nums)
+    lvls <- names(xtab)
+    topLevel[i] <- lvls[maxIndex]
+    missIndex <- which((is.na(x)) | (x == "") | (x == " "))
+    missCount[i] <- length(missIndex)
+  }
+  n <- nrow(df)
+  topFrac <- round(topCount/n, digits = dgts)
+  missFrac <- round(missCount/n, digits = dgts)
+  summaryFrame <- data.frame(variable = varNames, type = varType,
+  levels = levels, topLevel = topLevel,
+  topCount = topCount, topFrac = topFrac,
+  missFreq = missCount, missFrac = missFrac)
+  return(summaryFrame)
+}
+
+BasicSummary(df_copy %>% select(-c(Time)))
+
+```
+
+We remove the time variable because it is unnecessary for the summary
+
+```{r}
+plot(df_copy)
+```
+
+```{r}
+# Scatter plot between Population and livebirths
+ggplot(df_copy, aes(x = Population, y = livebirths)) +
+  geom_point() +
+  labs(x = "Population", y = "livebirths") +
+  ggtitle("Scatter Plot: Population vs livebirths")
+
+# Scatter plot between Population and deaths
+ggplot(df_copy, aes(x = Population, y = deaths)) +
+  geom_point() +
+  labs(x = "Population", y = "deaths") +
+  ggtitle("Scatter Plot: Population vs deaths")
+
+# Scatter plot between Population and employment_rate
+ggplot(df_copy, aes(x = Population, y = employment_rate)) +
+  geom_point() +
+  labs(x = "Population", y = "employment_rate") +
+  ggtitle("Scatter Plot: Population vs employment_rate")
+
+# Scatter plot between Population and unemployment_rate
+ggplot(df_copy, aes(x = Population, y = unemployment_rate)) +
+  geom_point() +
+  labs(x = "Population", y = "unemployment_rate") +
+  ggtitle("Scatter Plot: Population vs unemployment_rate")
+
+# Scatter plot between Population and consumption_expenditures
+ggplot(df_copy, aes(x = Population, y = consumption_expenditures)) +
+  geom_point() +
+  labs(x = "Population", y = "consumption_expenditures") +
+  ggtitle("Scatter Plot: Population vs consumption_expenditures")
+
+# Scatter plot between Population and income
+ggplot(df_copy, aes(x = Population, y = income)) +
+  geom_point() +
+  labs(x = "Population", y = "income") +
+  ggtitle("Scatter Plot: Population vs income")
+
+```
+
+```{r}
+plot(df_copy$Time, df_copy$Population, type = "l", col = "blue", xlab = "Date", ylab = "Total Population", main = "Time Series")
+```
+
+## correlation
+
+```{r}
+library(corrplot)
+library(ggcorrplot)
+
+numeric_vars <- sapply(df_copy, is.numeric)
+dfNumeric <- df_copy[, numeric_vars]
+
+matrix <- cor(dfNumeric)
+ggcorrplot(matrix, lab = TRUE, type = "lower")
+```
+
+```{r}
+#Perform correlation between variables
+correlation_matrix <- cor(df_copy[, -1])
+print(correlation_matrix)
+```
+
+```{r}
+#Plotting a boxplot of the above variables to verify the outliers.
+#consumption_expenditures dan income tidak digunakan karena memiliki banyak outliers
+par(mfrow = c(1, 8))
+boxplot(df_copy$Time, main='Time',col='Sky Blue')
+boxplot(df_copy$Population, main='Populatin=on',col='Sky Blue')
+boxplot(df_copy$livebirths, main='live births',col='Sky Blue')
+boxplot(df_copy$deaths, main='deaths',col='Sky Blue')
+boxplot(df_copy$employment_rate, main='employment rate',col='Sky Blue')
+boxplot(df_copy$unemployment_rate, main='unemployment rate',col='Sky Blue')
+boxplot(df_copy$consumption_expenditures, main='consumption expenditures',col='Sky Blue')
+boxplot(df_copy$income, main='income',col='Sky Blue')
+```
+
+```{r}
+# Hubungan antara Livebirths dan Population
+ggplot(df_copy, aes(x = livebirths, y = Population)) +
+  geom_point() +
+  labs(x = "Livebirths", y = "Population") +
+  theme_minimal()
+
+# Hubungan antara Deaths dan Population
+ggplot(df_copy, aes(x = deaths, y = Population)) +
+  geom_point() +
+  labs(x = "Deaths", y = "Population") +
+  theme_minimal()
+```
+
+```{r}
+#linear regression jenn version
+df_copy %>% ggplot(aes(x = Time, y = `Population`)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = lm, se = FALSE)
+
+
+df_copy %>% ggplot(aes(x = Time, y = `livebirths`)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = lm, se = FALSE)
+
+df_copy %>% ggplot(aes(x = Time, y = `deaths`)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = lm, se = FALSE)
+
+df_copy %>% ggplot(aes(x = Time, y = `employment_rate`)) +
+  geom_line() + geom_smooth(method = lm, se = FALSE)
+
+df_copy %>% ggplot(aes(x = Time, y = `unemployment_rate`)) +
+  geom_line() + geom_smooth(method = lm, se = FALSE)
+
+```
+
+```{r}
+df_copy %>% ggplot(aes(x = Time, y = `Population` )) +
+  geom_line(aes(y = `livebirths`), color = "green") +
+  geom_line(aes(y = `deaths`), color = "red") +
+  xlab("Time") +
+  ylab("Total population ")
+
+df_copy %>% ggplot(aes(x = Time)) +
+  geom_point(aes(y = `income`), color = "green") +
+  geom_point(aes(y = `consumption_expenditures`), color = "red") +
+  xlab("Time") +
+  ylab("Total consumption")
+
+```
+
+```{r}
+hist(df_copy$employment_rate, main = "Histogram of Employment Rate", xlab = "Employment Rate", ylab = "Frequency")
+hist(df_copy$unemployment_rate, main = "Histogram of Unemployment Rate", xlab = "Unemployment Rate", ylab = "Frequency")
+hist(df_copy$consumption_expenditures, main = "Histogram of Consumption Expenditures", xlab = "Consumption Expenditures", ylab = "Frequency")
+hist(df_copy$income, main = "Histogram of Income", xlab = "Income", ylab = "Frequency")
+```
+
+# Explanatory Data Analysis
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
+
+```{r}
+
+df_copy %>%
+ filter(Time >= "2018-10-19" & Time <= "2021-01-08") %>%
+ ggplot() +
+  aes(x = Time, y = Population) +
+  geom_line(colour = "#112446") +
+  labs(
+    x = "Time",
+    y = "Population",
+    title = "Major Population Decrease",
+    subtitle = "Happened in the late 2020"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20))
+```
+
+As of the late 2020s, Japan's population decreased significantly. As a result of a combination of factors, such as low birth rates and Covid 19 pandemic in 2019, immigration declined and deaths increased.
+
+```{r}
+#Perform correlation between variables
+
+library(corrplot)
+library(ggcorrplot)
+
+matrix <- cor(dfNumeric)
+ggcorrplot(matrix, lab = TRUE, type = "lower")
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+
+# Combine employment_rate and unemployment_rate into a single dataframe
+df_combined <- df_copy %>% filter(Time >= "2010-10-19") %>%
+  pivot_longer(cols = c(employment_rate, unemployment_rate), names_to = "rate_type", values_to = "rate")
+
+# Plot combined line chart
+ggplot(df_combined, aes(x = Time, y = rate, color = rate_type)) +
+  geom_line() +
+  labs(x = "Time", y = "Rate", title = "Employment and Unemployment Rates over Time") +
+  facet_wrap(~ rate_type, nrow = 2, scales = "free_y") +
+  scale_color_manual(values = c("Employment Rate" = "steelblue", "Unemployment Rate" = "darkorange")) +
+  labs(subtitle = "From 2010 to 2022")+
+  theme_minimal() + 
+   theme(plot.title = element_text(size = 20))
+
+```
+
+When someone is employed, people usually have little time to spend with their family, especially in Japan where overtime is common practice. Which could be a factor of the declining population.
+
+```{r}
+library(ggplot2)
+
+df_copy %>%
+  ggplot(aes(x = Time, y = `Population`)) +
+  geom_line(aes(y = `livebirths`, color = "Live Births"), size = 1) +
+  geom_line(aes(y = `deaths`, color = "Deaths"), size = 1) +
+  xlab("Time") +
+  ylab("Total Population") +
+  scale_color_manual(values = c("Live Births" = "green", "Deaths" = "red")) +
+  labs(color = "Legend", title = "Total live births and deaths") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20), legend.text = element_text(size = 14), legend.title = element_text(size = 16))
+
+```
+
+Based on the graph above, total live births are decreasing meanwhile total deaths are keep increasing in Japan This signals a population decline in Japan, which has been the case for the past decade. The decreasing birth rate and increasing death rate are both concerning trends for the future of Japan's population.
+
+# **Predictive Model**
+
+```{r}
+library(caTools)  # Required for the sample.split() function
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Split the data into 80% training and 20% testing
+split <- sample.split(df_copy$Population, SplitRatio = 0.8)
+train_data <- subset(df_copy, split == TRUE)
+test_data <- subset(df_copy, split == FALSE)
+
+```
+
+From the code above, we split the data into training and testing set by 80:20 ratio
+
+```{r}
+model1 <- lm(Population ~ ., data= train_data)
+summary(model1)
+```
+
+For the second model, we select independent variables based on p-value score, so we select livebirths, deaths, employment rates, and unemployment rates. We dont select "Time" variable because it is a time data type variable.
+
+```{r}
+# Build a linear regression model
+
+model <- lm(Population ~ livebirths + deaths + employment_rate + unemployment_rate, data = train_data)
+summary(model)
+```
+
+From the code above we select independent variables based on the correlativity to dependent variable. The second model got pretty high R\^2 score that demonstrated that the model was able to explain significant variation in the observed data.
+
+```{r}
+# Make predictions on the new dataset
+
+predictionMod1 <- predict(model1, newdata = test_data)
+predictions <- predict(model, newdata = test_data)
+
+test_data$pred <- predictions
+```
+
+We make prediction values based on model and testing data to test the model we have made
+
+```{r}
+# Evaluate the model
+library(Metrics)  # Required for the rse() function
+
+# Calculate the Relative squared error
+rseMod1_value <- rse(predictionMod1, test_data$Population)
+rse_value <- rse(test_data$Population, predictions)
+
+print(paste("RSE model 1:", rseMod1_value))
+print(paste("RSE model 2:", rse_value))
+```
+
+RSE provides information about how far the model's prediction is from the actual value. The lower the RSE value, the better the model matches the observed data with its predictions. Based on the test, we got lower RSE score for the second model that has pretty low value that means that the model matches the observed data with its predictions.
+
+```{r}
+# install.packages('lubridate')
+library(ggplot2)
+library(lubridate)
+
+# Create a dataframe with dates, actual values, and predicted values
+results <- data.frame(date = test_data$Time,
+                      actual = test_data$Population,
+                      predicted = predictions)
+
+# # Format the date column to display "month year" format
+# results$month_year <- format(results$date, format = "%B %Y")
+
+# print(results$actual)
+# Plot the actual and forecasted values as a time series
+ggplot(results, aes(x = results$date)) +
+  
+  geom_line(group = 1, aes(y = actual, color = "Actual")) +
+  
+  geom_line(aes(group = 1, y = predicted, color = "Predicted")) +
+  scale_color_manual(values = c("blue", "red"), labels = c("Actual", "Predicted")) +
+  xlab("Time") +
+  ylab("Total Population") +
+  ggtitle("Actual vs Predicted Total Population")+
+  theme(plot.title = element_text(size = 20), legend.text = element_text(size = 14), legend.title = element_text(size = 16))
+
+
+```
+
+# Conclusion
+
+-   Japan's population will continue to decline in the next few years.
+
+-   Japan's top population decreasing factors:
+
+    -   Decreasing live births
+
+        Based on the data, total live births are decreasing meanwhile total deaths are keep increasing in Japan This signals a population decline in Japan, which has been the case for the past decade. The decreasing birth rate and increasing death rate are both concerning trends for the future of Japan's population.
+
+    -   Unemployment rate and employment rate
+
+        This occurs when people are employed, they have hardly any time for their families especially in Japan where working overtime is a normal thing to do. There is also a view that children are economic burdens.
